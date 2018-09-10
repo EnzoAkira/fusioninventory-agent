@@ -2,7 +2,6 @@ package FusionInventory::Agent::Task::Inventory::Generic::Dmidecode::Bios;
 
 use strict;
 use warnings;
-#use Switch;
 
 use parent 'FusionInventory::Agent::Task::Inventory::Module';
 
@@ -34,23 +33,17 @@ sub _getBiosHardware {
     my $chassis_info = $infos->{3}->[0];
 
     
-    # For testing
-    
-    #my @infozero = $infos->{0}->[0];
-    #my @infoone = $infos->{1}->[0];
-    #my @infotwo = $infos->{2}->[0];
-    #my @infothree = $infos->{3}->[0];
-    
-    
+    # Beginning Testing	
     my @bios_info       = $bios_info;
     my @system_info     = $system_info;
     my @base_info       = $base_info;
     my @chassis_info    = $chassis_info;
     
-    print Data::Dumper->Dump([\@bios_info], [qw(bios_info)]);
-    print Data::Dumper->Dump([\@system_info], [qw(system_info)]);
-    print Data::Dumper->Dump([\@base_info], [qw(base_info)]);
-    print Data::Dumper->Dump([\@chassis_info], [qw(chassis_info)]);
+    #Debugging 
+	#print Data::Dumper->Dump([\@bios_info], [qw(bios_info)]);
+    #print Data::Dumper->Dump([\@system_info], [qw(system_info)]);
+    #print Data::Dumper->Dump([\@base_info], [qw(base_info)]);
+    #print Data::Dumper->Dump([\@chassis_info], [qw(chassis_info)]);
     
     for my $href ( @bios_info ){
         foreach my $rolev (values %$href ){
@@ -86,9 +79,8 @@ sub _getBiosHardware {
             }
         }
         $chassis_info = $href;
-    }
-     
-    # End Testing
+    }   
+    # End Beginning Testing
     
     my $bios = {
         BMANUFACTURER => '',
@@ -129,11 +121,7 @@ sub _getBiosHardware {
                     $bios->{BVERSION} = $href->{$role}
                 }
             }
-            #switch ($role) {
-            #   case "Vendor"            { $bios->{BMANUFACTURER} = $href->{$role}}
-            #   case "Release Date"      { $bios->{BDATE} = $href->{$role}}
-            #   case "Version"           { $bios->{BVERSION} = $href->{$role}}
-            #}
+            
         if ($bios->{BMANUFACTURER} eq ''){
             $bios->{BMANUFACTURER} = 'N/A';
         }
@@ -214,7 +202,8 @@ sub _getBiosHardware {
         $bios->{SSN} = $system_info->{'UUID'};
     }
     
-    #my $bios = {
+    ####### Old Code #######
+	#my $bios = {
     #    BMANUFACTURER => $bios_info->{'Vendor'},
     #    BDATE         => $bios_info->{'Release Date'},
     #    BVERSION      => $bios_info->{'Version'},
@@ -224,6 +213,7 @@ sub _getBiosHardware {
     #$bios->{MMODEL} = $base_info->{'Product Name'};
     #$bios->{MMANUFACTURER} = $base_info->{'Manufacturer'};
     #$bios->{MSN} = $base_info->{'Serial Number'};
+	####### Old Code #######
        
        
     my $hardware = {
