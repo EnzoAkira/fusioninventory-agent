@@ -92,6 +92,15 @@ sub _getDevices {
         if (!$device->{DISKSIZE} && $device->{TYPE} !~ /^cd/) {
             $device->{DISKSIZE} = getDeviceCapacity(device => '/dev/' . $device->{NAME});
         }
+        
+        #ADDED to prevent XML to be not well formatted
+        if (!$device->{SERIALNUMBER} || $device->{SERIALNUMBER} eq '') {
+            $device->{SERIALNUMBER} = 'N/D';
+        }
+        
+        if (!$device->{FIRMWARE} || $device->{FIRMWARE} eq '') {
+            $device->{FIRMWARE} = 'N/D';
+        }
     }
 
     return @devices;
