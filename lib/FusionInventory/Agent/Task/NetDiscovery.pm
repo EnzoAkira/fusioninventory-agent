@@ -119,13 +119,6 @@ sub run {
         );
     }
 
-    FusionInventory::Agent::Task::NetDiscovery::Ping->require();
-    if ($EVAL_ERROR) {
-        $self->{logger}->info(
-            "Can't load Task::NetDiscovery::Ping, timestamp ping can't be used"
-        );
-    }
-
     Net::NBName->require();
     if ($EVAL_ERROR) {
         $self->{logger}->info(
@@ -358,8 +351,6 @@ sub _scanAddress {
     my %device = (
         $INC{'Net/SNMP.pm'}      ? $self->_scanAddressBySNMP(%params)    : (),
         $INC{'Net/NBName.pm'}    ? $self->_scanAddressByNetbios(%params) : (),
-        $INC{'FusionInventory/Agent/Task/NetDiscovery/Ping.pm'} ?
-                                   $self->_scanAddressByTSPing(%params)  : (),
         $INC{'Net/Ping.pm'}      ? $self->_scanAddressByPing(%params)    : (),
         $params{arp}             ? $self->_scanAddressByArp(%params)     : (),
     );
@@ -383,16 +374,29 @@ sub _scanAddress {
 sub _scanAddressByArp {
     my ($self, %params) = @_;
 
-    my $output = getFirstLine(
+    return unless $params{ip};
+
+    # We want to match the ip including non digit character around
+    my $ip_match = '\D' . $params{ip} . '\D';
+    # We want to match dot on dots
+    $ip_match =~ s/\./\\./g;
+
+    my $output = getFirstMatch(
         command => "arp -a " . $params{ip},
+        pattern => qr/^(.*$ip_match.*)$/,
         %params
     );
 
     my %device = ();
 
-    if ($output =~ /^(\S+) \(\S+\) at (\S+) /) {
+    if ($output && $output =~ /^(\S+) \(\S+\) at (\S+) /) {
         $device{DNSHOSTNAME} = $1 if $1 ne '?';
         $device{MAC}         = getCanonicalMacAddress($2);
+    } elsif ($output && $output =~ /^\s+\S+\s+([:a-zA-Z0-9-]+)\s/) {
+        # Under win32, mac address separators are minus signs
+        my $mac_address = $1;
+        $mac_address =~ s/-/:/g;
+        $device{MAC} = getCanonicalMacAddress($mac_address);
     }
 
     $self->{logger}->debug(
@@ -405,40 +409,26 @@ sub _scanAddressByArp {
     return %device;
 }
 
-sub _scanAddressByTSPing {
-    my ($self, %params) = @_;
-
-    my $np = Net::Ping::TimeStamp->new('icmp', 1);
-
-    my %device = ();
-
-    if ($np->ping($params{ip})) {
-        $device{DNSHOSTNAME} = $params{ip};
-    }
-
-    $self->{logger}->debug(
-        sprintf "[thread %d] - scanning %s with timestamp ping: %s",
-        threads->tid(),
-        $params{ip},
-        $device{DNSHOSTNAME} ? 'success' : 'no result'
-    );
-
-    return %device;
-}
-
 sub _scanAddressByPing {
     my ($self, %params) = @_;
 
+    my $type = 'echo';
     my $np = Net::Ping->new('icmp', 1);
 
     my %device = ();
 
     if ($np->ping($params{ip})) {
         $device{DNSHOSTNAME} = $params{ip};
+    } elsif ($Net::Ping::VERSION >= 2.67) {
+        $type = 'timestamp';
+        $np->message_type($type);
+        if ($np->ping($params{ip})) {
+            $device{DNSHOSTNAME} = $params{ip};
+        }
     }
 
     $self->{logger}->debug(
-        sprintf "[thread %d] - scanning %s with echo ping: %s",
+        sprintf "[thread %d] - scanning %s with $type ping: %s",
         threads->tid(),
         $params{ip},
         $device{DNSHOSTNAME} ? 'success' : 'no result'

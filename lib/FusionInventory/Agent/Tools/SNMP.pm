@@ -53,6 +53,9 @@ sub getCanonicalString {
     # truncate after first invalid character but keep newline as valid
     $value =~ s/[^\p{Print}\n].*$//;
 
+    # Finally cleanup EOL if some is remaining at the end
+    chomp($value);
+
     return $value;
 }
 
@@ -65,7 +68,8 @@ sub getCanonicalMacAddress {
     my @bytes;
 
     # packed value, convert from binary to hexadecimal
-    if ($value =~ m/\A [[:ascii:]] \Z/xms) {
+    if ($value =~ m/\A [[:ascii:]] \Z/xms || length($value) == 6) {
+print STDERR "\nUNPACK\n";
         $value = unpack 'H*', $value;
     }
 
