@@ -117,7 +117,8 @@ sub getCanonicalManufacturer {
         TMx86        => 'Transmeta',
         TransmetaCPU => 'Transmeta',
         CyrixInstead => 'Cyrix',
-        CentaurHauls => 'VIA'
+        CentaurHauls => 'VIA',
+        HygonGenuine => 'Hygon'
     );
 
     if (exists $manufacturers{$manufacturer}) {
@@ -355,7 +356,7 @@ sub getFirstLine {
     my $result = <$handle>;
     close $handle;
 
-    chomp $result if $result;
+    chomp $result if defined $result;
     return $result;
 }
 
@@ -371,7 +372,7 @@ sub getLastLine {
     }
     close $handle;
 
-    chomp $result if $result;
+    chomp $result if defined $result;
     return $result;
 }
 

@@ -33,6 +33,12 @@ my %arp_test = (
             MAC         => "00:8d:b9:37:4a:c2"
         }
     },
+    'linux-ip-neighbor' => {
+        ip      => "10.0.10.1",
+        device  => {
+            MAC         => "00:0d:b9:37:2b:c2"
+        }
+    },
     'win32' => {
         ip      => "192.168.0.1",
         device  => {
@@ -59,15 +65,17 @@ plan tests => scalar keys %arp_test ;
 foreach my $arp_case (keys(%arp_test)) {
 
     my $self = {
+        arp    => "true",
         logger => $logger
     };
     bless $self, "FusionInventory::Agent::Task::NetDiscovery";
 
-    my %device = $self->_scanAddressByArp(
+    my %device = $self->_scanAddressByArp({
+        jid     => $arp_case,
         ip      => $arp_test{$arp_case}->{ip},
         logger  => $logger,
         file    => "resources/generic/arp/$arp_case"
-    );
+    });
 
     cmp_deeply(
         $arp_test{$arp_case}->{device}, \%device,

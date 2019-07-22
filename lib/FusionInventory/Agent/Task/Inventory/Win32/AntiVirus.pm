@@ -26,6 +26,7 @@ sub doInventory {
     my (%params) = @_;
 
     my $inventory = $params{inventory};
+    my $logger    = $params{logger};
     my $seen;
 
     # Doesn't works on Win2003 Server
@@ -54,22 +55,33 @@ sub doInventory {
 
             if ($object->{productState}) {
                 my $hex = dec2hex($object->{productState});
+                $logger->debug("Found $antivirus->{NAME} (state=$hex)")
+                    if $logger;
                 # See http://neophob.com/2010/03/wmi-query-windows-securitycenter2/
                 my ($enabled, $uptodate) = $hex =~ /(.{2})(.{2})$/;
                 if (defined($enabled) && defined($uptodate)) {
                     $antivirus->{ENABLED}  =  $enabled =~ /^1.$/ ? 1 : 0;
                     $antivirus->{UPTODATE} = $uptodate =~ /^00$/ ? 1 : 0;
                 }
+            } else {
+                $logger->debug("Found $antivirus->{NAME}")
+                    if $logger;
             }
 
             # Also support WMI access to Windows Defender
             if (!$antivirus->{VERSION} && $antivirus->{NAME} =~ /Windows Defender/i) {
-                my ($defender) = getWMIObjects(
-                    moniker    => 'winmgmts://./root/microsoft/windows/defender',
-                    class      => "MSFT_MpComputerStatus",
-                    properties => [ qw/AMProductVersion AntivirusEnabled
-                        AntivirusSignatureVersion/ ]
-                );
+                my $defender;
+                # Don't try to access Windows Defender class if not enabled as
+                # WMI call can fail after a too long time while another antivirus
+                # is installed
+                if ($antivirus->{ENABLED}) {
+                    ($defender) = getWMIObjects(
+                        moniker    => 'winmgmts://./root/microsoft/windows/defender',
+                        class      => "MSFT_MpComputerStatus",
+                        properties => [ qw/AMProductVersion AntivirusEnabled
+                            AntivirusSignatureVersion/ ]
+                    );
+                }
                 if ($defender) {
                     $antivirus->{VERSION} = $defender->{AMProductVersion}
                         if $defender->{AMProductVersion};
@@ -117,12 +129,19 @@ sub doInventory {
                 _setMSEssentialsInfos($antivirus);
             } elsif ($antivirus->{NAME} =~ /F-Secure/i) {
                 _setFSecureInfos($antivirus);
+            } elsif ($antivirus->{NAME} =~ /Bitdefender/i) {
+                _setBitdefenderInfos($antivirus,$logger);
+            } elsif ($antivirus->{NAME} =~ /Norton|Symantec/i) {
+                _setNortonInfos($antivirus);
             }
 
             $inventory->addEntry(
                 section => 'ANTIVIRUS',
                 entry   => $antivirus
             );
+
+            $logger->debug2("Added $antivirus->{NAME}".($antivirus->{VERSION}? " v$antivirus->{VERSION}":""))
+                if $logger;
         }
     }
 }
@@ -226,8 +245,8 @@ sub _setESETInfos {
         if $esetReg->{"/ProductName"};
 
     # Look at license file
-    if ($esetReg->{"/AppDataDir"} && -d $esetReg->{"/AppDataDir"}.'\License') {
-        my $license = $esetReg->{"/AppDataDir"}.'\License\license.lf';
+    if ($esetReg->{"/AppDataDir"} && -d $esetReg->{"/AppDataDir"}.'/License') {
+        my $license = $esetReg->{"/AppDataDir"}.'/License/license.lf';
         my @content = getAllLines( file => $license );
         my $string = join('', map { getSanitizedString($_) } @content);
         # License.lf file seems to be a signed UTF-16 XML. As getSanitizedString()
@@ -339,6 +358,104 @@ sub _setFSecureInfos {
 
     my @date = localtime($expiry_date);
     $antivirus->{EXPIRATION} = sprintf("%02d/%02d/%04d",$date[3],$date[4]+1,$date[5]+1900);
+}
+
+sub _setBitdefenderInfos {
+    my ($antivirus) = @_;
+
+    my $bitdefenderReg = _getSoftwareRegistryKeys(
+        'BitDefender\About',
+        [ qw(ProductName ProductVersion) ]
+    );
+
+    return unless $bitdefenderReg;
+
+    $antivirus->{VERSION} = $bitdefenderReg->{"/ProductVersion"}
+        if $bitdefenderReg->{"/ProductVersion"};
+    $antivirus->{NAME} = $bitdefenderReg->{"/ProductName"}
+        if $bitdefenderReg->{"/ProductName"};
+
+    my $path = _getSoftwareRegistryKeys(
+        'BitDefender',
+        [ 'Bitdefender Scan Server' ],
+        sub { $_[0]->{"/Bitdefender Scan Server"} }
+    );
+    if ($path && -d $path) {
+        my $handle = getDirectoryHandle( directory => $path );
+        if ($handle) {
+            my ($major,$minor) = (0,0);
+            while (my $entry = readdir($handle)) {
+                next unless $entry =~ /Antivirus_(\d+)_(\d+)/;
+                next unless (-d "$path/$entry/Plugins" && -e "$path/$entry/Plugins/update.txt");
+                next if ($1 < $major || ($1 == $major && $2 < $minor));
+                ($major,$minor) = ($1, $2);
+                my %update = map { /^([^:]+):\s*(.*)$/ }
+                    getAllLines(file => "$path/$entry/Plugins/update.txt");
+                $antivirus->{BASE_VERSION} = $update{"Signature number"}
+                    if $update{"Signature number"};
+            }
+        }
+    }
+
+    my $surveydata = _getSoftwareRegistryKeys(
+        'BitDefender\Install',
+        [ 'SurveyDataInfo' ],
+        sub { $_[0]->{"/SurveyDataInfo"} }
+    );
+    if ($surveydata) {
+        JSON::PP->require();
+        my $datas;
+        eval {
+            $datas = JSON::PP::decode_json($surveydata);
+        };
+        if (defined($datas->{days_left})) {
+            my @date = localtime(time+86400*$datas->{days_left});
+            $antivirus->{EXPIRATION} = sprintf("%02d/%02d/%04d",$date[3],$date[4]+1,$date[5]+1900);
+        }
+    }
+}
+
+sub _setNortonInfos {
+    my ($antivirus) = @_;
+
+    # ref: https://support.symantec.com/en_US/article.TECH251363.html
+    my $nortonReg = _getSoftwareRegistryKeys(
+        'Norton\{0C55C096-0F1D-4F28-AAA2-85EF591126E7}',
+        [ qw(PRODUCTVERSION) ]
+    );
+    if ($nortonReg && $nortonReg->{PRODUCTVERSION}) {
+        $antivirus->{VERSION} = $nortonReg->{PRODUCTVERSION};
+    }
+
+    # Lookup for BASE_VERSION as CurDefs in definfo.dat insome places
+    # See also https://support.symantec.com/en_US/article.TECH237037.html
+    my @datadirs = (
+        'C:/ProgramData/Symantec/Symantec Endpoint Protection/CurrentVersion/Data',
+        'C:/Documents and Settings/All Users/Application Data/Symantec/Symantec Endpoint Protection/CurrentVersion/Data',
+    );
+
+    $nortonReg = _getSoftwareRegistryKeys(
+        'Norton\{0C55C096-0F1D-4F28-AAA2-85EF591126E7}\Common Client\PathExpansionMap',
+        [ qw(DATADIR) ]
+    );
+    if ($nortonReg && $nortonReg->{DATADIR}) {
+        $nortonReg->{DATADIR} =~ s|\\|/|g;
+        unshift @datadirs, $nortonReg->{DATADIR}
+            if -d $nortonReg->{DATADIR};
+    }
+
+    # Extract BASE_VERSION from the first found valid definfo.dat file
+    foreach my $datadir (@datadirs) {
+        my ($defdir) = grep { -d $datadir.'/'.$_ } qw(Definitions/SDSDefs Definitions/VirusDefs);
+        next unless $defdir;
+        my $definfo = $datadir . '/' . $defdir . "/definfo.dat";
+        next unless -e $definfo;
+        my ($curdefs) = grep { /^CurDefs=/ } getAllLines( file => $definfo );
+        if ($curdefs && $curdefs =~ /^CurDefs=(.*)$/) {
+            $antivirus->{BASE_VERSION} = $1;
+            last;
+        }
+    }
 }
 
 sub _getSoftwareRegistryKeys {

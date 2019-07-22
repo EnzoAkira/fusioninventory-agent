@@ -31,9 +31,7 @@ requires 'Net::IP'            => '0';
 requires 'Text::Template'     => '0';
 requires 'UNIVERSAL::require' => '0';
 requires 'XML::TreePP'        => '0.26';
-if ($OSNAME =~ /darwin/i) {
-    requires 'XML::XPath'        => '0';
-}
+requires 'XML::XPath'         => '0';
 
 if ($OSNAME eq 'MSWin32') {
     requires 'Win32::OLE'         => '0';
@@ -104,6 +102,7 @@ install_script 'bin/fusioninventory-wakeonlan';
 install_script 'bin/fusioninventory-netdiscovery';
 install_script 'bin/fusioninventory-netinventory';
 install_script 'bin/fusioninventory-esx';
+install_script 'bin/fusioninventory-remoteinventory';
 
 resources
     homepage    => "http://www.fusioninventory.org",
@@ -239,24 +238,25 @@ sub install {
     $install .= <<'EOF';
 
 config_install : pure_install
-	install -d -m 755 $(DESTDIR)$(SYSCONFDIR)
-	if [ -f $(DESTDIR)/$(SYSCONFDIR)/agent.cfg ]; then \
-	    install -m 644 etc/agent.cfg $(DESTDIR)$(SYSCONFDIR)/agent.cfg.new; \
-	else \
-	    install -m 644 etc/agent.cfg $(DESTDIR)$(SYSCONFDIR)/agent.cfg; \
-	fi
+	$(MKPATH) $(DESTDIR)$(SYSCONFDIR)
+	$(NOECHO) $(CHMOD) $(PERM_DIR) $(DESTDIR)$(SYSCONFDIR)
+	for config in agent.cfg inventory-server-plugin.cfg server-test-plugin.cfg ssl-server-plugin.cfg ; \
+	do \
+	  if $(TEST_F) $(DESTDIR)/$(SYSCONFDIR)/$$config; then \
+	    $(RM_F) $(DESTDIR)$(SYSCONFDIR)/$$config.new; \
+	    $(CP) etc/$$config $(DESTDIR)$(SYSCONFDIR)/$$config.new; \
+	    $(CHMOD) $(PERM_RW) $(DESTDIR)$(SYSCONFDIR)/$$config.new; \
+	  else \
+	    $(CP) etc/$$config $(DESTDIR)$(SYSCONFDIR)/$$config; \
+	    $(CHMOD) $(PERM_RW) $(DESTDIR)$(SYSCONFDIR)/$$config; \
+	  fi; \
+	done
 	$(ABSPERLRUN) -pi \
 	    -e "s|=> undef, # SYSCONFDIR.*|=> '$(SYSCONFDIR)',|;" \
 	        $(DESTDIR)$(DATADIR)/lib/FusionInventory/Agent/Config.pm
 
 data_install : pure_install
-	install -d -m 755 $(DESTDIR)$(DATADIR)
-	install -m 644 share/pci.ids $(DESTDIR)$(DATADIR)/
-	install -m 644 share/usb.ids $(DESTDIR)$(DATADIR)/
-	install -m 644 share/sysobject.ids $(DESTDIR)$(DATADIR)/
-	install -m 644 share/edid.ids $(DESTDIR)$(DATADIR)/
-	install -d -m 755 $(DESTDIR)$(DATADIR)/html
-	install -m 644 share/html/* $(DESTDIR)$(DATADIR)/html
+	$(MOD_INSTALL) "share" "$(DESTDIR)$(DATADIR)"
 
 setup_install : pure_install
 	# Cleanup setup file to only really needed hash during install

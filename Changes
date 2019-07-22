@@ -1,15 +1,169 @@
 Revision history for FusionInventory agent
 
-2.4.3 not released yet
+2.5.1 Tue, 02 Jul 2019
+
+core:
+* build: fix fusioninventory-remoteinventory was not installed
+* fix HTTP server plugins base configuration folder
+* fix HTTP server plugins installation from Makefile
+* fix HTTP server SSL plugin so SSL sessions are not closed after one second
+* fix #679: Win32 service HTTP server wasn't answering during an inventory
+* feature: Added Proxy and SecondaryProxy HTTP server plugins
 
 inventory:
+* Bump Inventory task version to 1.8
+* fix error message while starting fusioninventory-inventory script
+* fix #667: LG tv monitor inventory failure
+* win32: VirtualBox or VPN network adapters are now set as virtual
+* added Samsung S24E450 monitor serial support
+* linux: fix megacli storage analysis
+* linux: check package status before telling it is installed on debian/ubuntu
+* fix #688: inventory on "windows x64 1903" takes too much time. That was only
+  happen when an antivirus other than Windows Defender was enabled and it blocks
+  WMI call toward MSFT_MpComputerStatus class.
+* win32: Add Symantec/Norton antivirus support
+* fix #399: Deduplicate logged users without being case sensitive on win32
+* Updated pci.ids to 2019.06.30 version
+* Updated usb.ids to 2019.05.08 version
+
+netdiscovery/netinventory:
+* Bump NetDiscovery task version to 4.0
+* Bump NetInventory task version to 4.0
+* add Hygon Dhyana Support
+* refactor: the multi-threading scheme has been re-worked so it is now working for
+  netinventory task and more efficient for netdiscovery while scanning many range
+  by job
+* refactor: Collected datas are also sent to server from threads
+* Added 2 options to fusioninventory-netdiscovery to save XMLs as file and
+  automatically start netinventory when convenient:
+  * add --inventory option to netdiscovery to automatically start netinventory
+  * add --save option to define a folder where to save related XML
+* Updated sysobject.ids (tagged fia-2.5.1 tag on github repository)
+
+esx:
+* Bump ESX task version to 2.5
+* Support EnclosureSerialNumberTag and SerialNumberTag values as availables since
+  VMware ESXi 6.5, Patch Release ESXi650-201811002 (build-10884925) and in latest
+  VMware ESXi 6.7.
+* add esx script new options:
+  Add --dump and --dumpfile option to help ESX support debugging
+
+2.5 Fri, 12 Apr 2019
+
+core:
+* linux: reload logger during daemonize to avoid issues like not listening http
+  daemon if logger has still not been used before starting the listener
+* Fix #646: HTTP daemon not starting on CentOS 7
+* revert dfcb64573e as now more generic fix has been implemented in a538abaed7
+  (tested on CentOS 6)
+* win32: don't show service memory usage on OS not supporting GetProcessMemoryInfo
+* Fix #601: Log URL for server target and log path for local target
+* win32: add early stderr logging support for service
+  Just rename "fusioninventory-win32-service.rc.sample" removing ".sample" part
+  to enable this feature. This can be handy to investigate start service failures.
+* Added support for HTTPD plugins
+* Added Inventory HTTPD plugins to permit remote inventory request (disabled by default)
+* Added Listener target to permit agent to only answer http requests
+* Updated configuration to support HTTPD plugins dedicated configuration file
+* Added fusioninventory-remoteinventory script to request agent with Inventory
+  HTTPD plugin enabled
+* Fix HTTPD local address reuse
+* Added SSL HTTPD plugins to support SSL in any server plugins
+* Limit the reload target check to 30 seconds
+* win32: report memory usage as Working Set Size (WSS) and Page File Usage (PFU)
+* win32: revert handling service with callbacks. Even if Win32::Daemon proposes
+  the callbacks usage obsoletes the typical skeleton code, the callbacks usage
+  is known to leak memory and tests with latest Win32::Daemon shows that's true.
+* win32: handle task run in a managed thread as this is more efficient than using
+  perl fork with thread emulation under win32 and preserve a little memory usage.
+* win32: wait service control manager is ready before really starting the service
+* logger: don't use File::stat module to just get logfile file size, better use -s
+  as File::stat module seems to fail in rare case.
+
+inventory:
+* Bump Inventory task version to 1.7
+* Fix lspci command subsystem parsing
+* Fix hponcfg.exe can output on stderr on win32 when not really usable
+* Skip not working under win32 Generic::Users inventory
+  Also avoid error in log on /etc/passwd and /etc/group not found files
+* Fix #601: Log deviceid as agentid and related target when running an inventory
+* Fix #644: Make WORKGROUP inventory consistent
+* Fix #541: Don't try to scan virtualbox VM in win32 users directories
+* Updated pci.ids to 2019.04.12 version
+* Updated usb.ids to 2019.03.20 version
+
+netdiscovery/netinventory:
+* Bump NetDiscovery task version to 2.9
+* Bump NetInventory task version to 3.3
+* Add Lancom in networking devices recognized by description parsing
+* Fix #650: discard empty consumable level elements
+* Fix #651: discard empty type element
+* Add Netdisco export contrib script from Stoatwblr, see contrib/netdisco
+* Fix #638: Fix Kyocera counters handling thanks to Stoatwblr
+* Printers: assume -2 counter value means a WARNING level and report it
+  Thanks Stoatwblr for the deep investigation
+* Add Oki printer support
+* Add APC serialnumber support
+* Fix #612: Enhanced Ubnt AccessPoint support
+* Updated sysobject.ids (tagged fia-2.5 tag on github repository)
+
+deploy:
+* Bump Deploy task version to 2.8
+* Fix #394: Check file parts source/mirror url to guaranty it ends with a slash
+  and trigger an error if it doesn't look like a valid URL.
+
+collect:
+* Bump Collect task version to 2.6
+* WMI properties can now be a list of properties with comma or space as separator
+
+2.4.3 Fri, 22 Feb 2019
+
+core:
+* fix some cases where a file handle was not closed
+* win32: fix a handle leak case when agent was running as service
+* Fix #637: Don't depend on GNU install during "make install" to support
+  more Unix systems
+* daemon/service: reload target when the stat file has been updated by
+  another script to use the updated next run timeout
+* For server target, server connection attempts are delayed from 60 seconds,
+  doubled at each new failed attempt, now until reaching max defined by delaytime
+  configuration parameter.
+
+inventory:
+* Bump Inventory task version to 1.6
 * win32 antivirus support update:
  - nicer product name report for ESET
  - report expiration date for ESET
+* Fix #582: Add other Acer monitors support
+* Fix #687: Virtuozzo inventory task doesn't include first container
+* Add few minor fix to virtuozzo containers inventory
+* Fix LXC containers support to support recent LXC versions
+* Fix #625: Container UUID is the same than host UUID
+* Fix #624: Skip incomplete battery infos from dmidecode (seen on MacOS)
+* Fix #631: Fix duplicated memory inventory on MacOS
+* linux: fix storage size inventory
+* linux: try to set storage serialnumber from mbr partition id or even
+  PV UUID when not found (hdparm missing or virtual drive)
+* Fix #604: Only inventory Windows Store on recent win32 platforms
+* Fix #596: Openstack container seen as Physical on win32
+* Fix #593: Correct detection of machine type when /var/log/dmesg is too short
+* Fix #583: Add BitDefender antivirus support
+* Encrypted filesystems support added
+* Updated pci.ids to 2019.02.20 version
+* Updated usb.ids to 2019.01.17 version
 
 netdiscovery/netinventory:
+* Bump NetDiscovery task version to 2.8
+* Bump NetInventory task version to 3.2
 * Add BlueCoat proxy appliance serialnumber support
 * win32: Support arp table check for NetDiscovery task
+* Fix #634: Net::Ping version may not numeric with win32 installer
+* Add Panasas PanFS support
+* Add few HP/Compaq serialnumber cases support
+* Fix #605: try 'ip neighbor show' if 'arp' is not available for netdiscovery
+* Add UPS-MIB support for Riello, S2S & APC
+* Components support added
+* Updated sysobject.ids (tagged fia-2.4.3 tag on github repository)
 
 2.4.2 Wed, 03 Oct 2018
 
@@ -412,6 +566,7 @@ inventory:
 * Fixed memory reporting on Solaris
 * Enhanced installdate for softwares on many platforms
 * Enhanced drive a storage reporting on win32
+* Fix #584: Acer B196HQL S/N support
 
 deploy:
 * Bump Deploy task version to 2.1.0
